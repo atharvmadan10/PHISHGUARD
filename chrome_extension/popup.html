@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PhishGuard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 340px;
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      padding: 16px 20px;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header h1 { font-size: 18px; font-weight: 700; color: #f8fafc; }
+    .header span { font-size: 22px; }
+
+    .verdict-block {
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid #1e293b;
+    }
+    .verdict-label {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 2px;
+    }
+    .verdict-SAFE { color: #22c55e; }
+    .verdict-SUSPICIOUS { color: #f59e0b; }
+    .verdict-PHISHING { color: #ef4444; }
+
+    .risk-bar-wrap {
+      margin: 10px auto;
+      width: 80%;
+      background: #1e293b;
+      border-radius: 20px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .risk-bar {
+      height: 100%;
+      border-radius: 20px;
+      transition: width 0.5s ease;
+    }
+
+    .score-text {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+
+    .section {
+      padding: 14px 20px;
+      border-bottom: 1px solid #1e293b;
+    }
+    .section h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+
+    .feature-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+    }
+    .feature-row .val { font-weight: 600; }
+    .val-bad { color: #ef4444; }
+    .val-ok { color: #22c55e; }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      margin: 2px;
+    }
+    .tag-bad { background: #450a0a; color: #ef4444; }
+    .tag-ok { background: #052e16; color: #22c55e; }
+
+    .url-text {
+      font-size: 11px;
+      color: #64748b;
+      word-break: break-all;
+      padding: 8px 20px 0;
+    }
+
+    .footer {
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .scan-time { font-size: 11px; color: #475569; }
+    .rescan-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .rescan-btn:hover { background: #334155; }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .spinner {
+      width: 30px; height: 30px;
+      border: 3px solid #1e293b;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error { color: #ef4444; text-align: center; padding: 30px 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <span>🛡️</span>
+  <h1>PhishGuard</h1>
+</div>
+
+<div id="content">
+  <div class="loading">
+    <div class="spinner"></div>
+    Scanning URL...
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
