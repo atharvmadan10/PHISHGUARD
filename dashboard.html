@@ -18,13 +18,12 @@
     }
     header h1 { font-size: 20px; font-weight: 700; }
     header p  { font-size: 13px; color: #64748b; margin-top: 2px; }
-    .live-dot  { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; margin-left: auto; animation: pulse 1.5s infinite; }
-    .live-text { font-size: 12px; color: #22c55e; margin-left: 6px; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .live-dot  { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; animation: pulse 1.5s infinite; }
+    .live-text { font-size: 12px; margin-left: 6px; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
  
     .container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
  
-    /* KPI */
     .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
     .kpi-card { background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; }
     .kpi-label { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#64748b; margin-bottom:8px; }
@@ -35,7 +34,6 @@
     .kpi-susp  .kpi-value { color:#f59e0b; }
     .kpi-total .kpi-value { color:#3b82f6; }
  
-    /* Scan box */
     .scan-box { background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; margin-bottom:28px; }
     .scan-box h2 { font-size:15px; margin-bottom:14px; }
     .scan-row { display:flex; gap:10px; }
@@ -44,63 +42,75 @@
       padding:10px 14px; border-radius:8px; font-size:14px;
     }
     .scan-row input:focus { outline:none; border-color:#3b82f6; }
-    .btn-primary { background:#3b82f6; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600; white-space:nowrap; }
-    .btn-primary:hover { background:#2563eb; }
+    .btn {
+      border:none; padding:10px 20px; border-radius:8px;
+      cursor:pointer; font-size:14px; font-weight:600;
+    }
+    .btn-blue  { background:#3b82f6; color:#fff; }
+    .btn-blue:hover { background:#2563eb; }
+    .btn-green { background:#16a34a; color:#fff; }
+    .btn-green:hover { background:#15803d; }
+    .btn-red   { background:#dc2626; color:#fff; }
+    .btn-red:hover { background:#b91c1c; }
  
     #scan-result { margin-top:14px; font-size:14px; display:none; padding:12px; border-radius:8px; }
     .result-safe       { color:#22c55e; background:#052e16; }
     .result-suspicious { color:#f59e0b; background:#422006; }
     .result-phishing   { color:#ef4444; background:#450a0a; }
  
-    /* Obfuscation warning box */
-    #obfuscation-box {
-      display:none; margin-top:10px; padding:10px 14px;
-      background:#1c1917; border:1px solid #78350f; border-radius:8px;
-      font-size:13px; color:#fbbf24;
-    }
-    #obfuscation-box strong { display:block; margin-bottom:4px; }
-    #decoded-url { color:#94a3b8; font-family:monospace; font-size:12px; word-break:break-all; margin-top:4px; }
- 
-    /* IoC Export bar */
-    .export-bar {
-      background:#1e293b; border-radius:12px; padding:16px 20px;
-      border:1px solid #334155; margin-bottom:28px;
-      display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-    }
-    .export-bar span { font-size:13px; color:#94a3b8; margin-right:4px; }
-    .btn-export {
-      background:transparent; border:1px solid #475569; color:#94a3b8;
-      padding:7px 14px; border-radius:7px; cursor:pointer; font-size:12px;
-      font-weight:600; display:flex; align-items:center; gap:6px; transition:.15s;
-    }
-    .btn-export:hover { border-color:#3b82f6; color:#3b82f6; }
-    .btn-export.phish { border-color:#7f1d1d; color:#ef4444; }
-    .btn-export.phish:hover { border-color:#ef4444; background:#450a0a; }
-    .btn-export.susp  { border-color:#78350f; color:#f59e0b; }
-    .btn-export.susp:hover  { border-color:#f59e0b; background:#422006; }
- 
-    /* Two-col layout */
     .two-col { display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:28px; }
     .card { background:#1e293b; border-radius:12px; padding:20px; border:1px solid #334155; }
     .card h2 { font-size:14px; font-weight:600; margin-bottom:16px; color:#94a3b8; }
  
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th { text-align:left; padding:8px 10px; color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #334155; }
-    td { padding:10px 10px; border-bottom:1px solid #1e293b; color:#cbd5e1; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    tr:hover td { background:#0f172a; }
+    td { padding:10px; border-bottom:1px solid #1e293b; color:#cbd5e1; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    tr:hover td { background:#0f172a; cursor:pointer; }
  
     .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
     .badge-PHISHING   { background:#450a0a; color:#ef4444; }
     .badge-SUSPICIOUS { background:#422006; color:#f59e0b; }
     .badge-SAFE       { background:#052e16; color:#22c55e; }
-    .badge-obf { background:#1c1917; color:#fbbf24; font-size:10px; margin-left:4px; }
  
-    .refresh-btn { float:right; background:transparent; border:1px solid #334155; color:#64748b; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px; }
-    .refresh-btn:hover { border-color:#64748b; color:#e2e8f0; }
+    .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .toolbar h2 { font-size:14px; font-weight:600; color:#94a3b8; margin:0; }
+    .toolbar-btns { display:flex; gap:8px; }
+    .small-btn {
+      background:transparent; border:1px solid #334155; color:#64748b;
+      padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px;
+    }
+    .small-btn:hover { border-color:#64748b; color:#e2e8f0; }
+    .export-btn {
+      background:#16a34a; border:none; color:#fff;
+      padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;
+    }
+    .export-btn:hover { background:#15803d; }
  
-    .no-server { text-align:center; padding:40px; color:#ef4444; font-size:14px; background:#450a0a; border-radius:12px; margin-bottom:28px; }
+    /* IoC Modal */
+    .modal-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.7); z-index:1000;
+      align-items:center; justify-content:center;
+    }
+    .modal-overlay.open { display:flex; }
+    .modal {
+      background:#1e293b; border-radius:12px; border:1px solid #334155;
+      padding:24px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto;
+    }
+    .modal h2 { font-size:16px; margin-bottom:16px; color:#f8fafc; }
+    .modal pre {
+      background:#0f172a; padding:16px; border-radius:8px;
+      font-size:12px; color:#94a3b8; overflow-x:auto;
+      white-space:pre-wrap; word-break:break-all;
+    }
+    .modal-btns { display:flex; gap:10px; margin-top:16px; justify-content:flex-end; }
  
-    @media(max-width:768px){
+    .no-server {
+      text-align:center; padding:20px; color:#ef4444;
+      background:#450a0a; border-radius:12px; margin-bottom:28px; font-size:14px;
+    }
+ 
+    @media (max-width:768px) {
       .kpi-grid { grid-template-columns:repeat(2,1fr); }
       .two-col  { grid-template-columns:1fr; }
     }
@@ -112,17 +122,19 @@
   <span style="font-size:28px">🛡️</span>
   <div>
     <h1>PhishGuard Dashboard</h1>
-    <p>Real-time phishing threat monitoring &amp; IoC reporting</p>
+    <p>Real-time phishing threat monitoring</p>
   </div>
   <div class="live-dot" id="live-dot" style="background:#ef4444"></div>
-  <span class="live-text" id="live-text">Connecting...</span>
+  <span class="live-text" id="live-text" style="color:#ef4444">Connecting...</span>
 </header>
  
 <div class="container">
  
   <div id="server-warning" class="no-server" style="display:none">
-    ⚠️ Cannot reach PhishGuard API at localhost:8000 — make sure the server is running:<br><br>
-    <code style="background:#1e293b;padding:6px 12px;border-radius:6px">uvicorn main:app --reload --port 8000</code>
+    Cannot reach PhishGuard API at localhost:8000 — run:
+    <code style="background:#1e293b;padding:4px 10px;border-radius:6px;margin-left:8px">
+      python -m uvicorn main:app --port 8000
+    </code>
   </div>
  
   <!-- KPI Cards -->
@@ -149,29 +161,14 @@
     </div>
   </div>
  
-  <!-- Manual Scan -->
+  <!-- Manual scan -->
   <div class="scan-box">
     <h2>🔍 Manual URL Scan</h2>
     <div class="scan-row">
-      <input type="text" id="url-input" placeholder="https://example.com or http://susp%69cious-l%6Fgin.xyz" />
-      <button class="btn-primary" onclick="manualScan()">Scan Now</button>
+      <input type="text" id="url-input" placeholder="https://example.com" />
+      <button class="btn btn-blue" onclick="manualScan()">Scan Now</button>
     </div>
     <div id="scan-result"></div>
-    <div id="obfuscation-box">
-      <strong>⚠️ Obfuscation Detected</strong>
-      <div id="obfuscation-techniques"></div>
-      <div id="decoded-url"></div>
-    </div>
-  </div>
- 
-  <!-- IoC Export Bar -->
-  <div class="export-bar">
-    <span>📦 Export IoC Report:</span>
-    <button class="btn-export" onclick="exportIoC('json','ALL')">⬇ All (JSON)</button>
-    <button class="btn-export" onclick="exportIoC('csv','ALL')">⬇ All (CSV)</button>
-    <button class="btn-export phish" onclick="exportIoC('json','PHISHING')">⬇ Phishing Only (JSON)</button>
-    <button class="btn-export phish" onclick="exportIoC('csv','PHISHING')">⬇ Phishing Only (CSV)</button>
-    <button class="btn-export susp"  onclick="exportIoC('csv','SUSPICIOUS')">⬇ Suspicious (CSV)</button>
   </div>
  
   <!-- Chart + History -->
@@ -180,26 +177,25 @@
       <h2>Verdict Distribution</h2>
       <canvas id="pie-chart" height="220"></canvas>
       <div id="no-data-msg" style="text-align:center;color:#475569;font-size:13px;margin-top:10px;display:none">
-        No scans yet — scan some URLs to see data
+        No scans yet
       </div>
     </div>
+ 
     <div class="card">
-      <h2>
-        Recent Scans
-        <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
-      </h2>
+      <div class="toolbar">
+        <h2>Recent Scans</h2>
+        <div class="toolbar-btns">
+          <button class="export-btn" onclick="exportAllIoC()">⬇ Export IoC Report</button>
+          <button class="small-btn" onclick="loadAll()">↻ Refresh</button>
+        </div>
+      </div>
       <div style="max-height:320px;overflow-y:auto">
         <table>
           <thead>
-            <tr>
-              <th>URL</th>
-              <th>Verdict</th>
-              <th>Risk</th>
-              <th>Time</th>
-            </tr>
+            <tr><th>URL</th><th>Verdict</th><th>Risk</th><th>Time</th><th>IoC</th></tr>
           </thead>
           <tbody id="history-body">
-            <tr><td colspan="4" style="color:#475569;text-align:center">Loading...</td></tr>
+            <tr><td colspan="5" style="color:#475569;text-align:center">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -208,184 +204,228 @@
  
 </div>
  
+<!-- IoC Modal -->
+<div class="modal-overlay" id="ioc-modal">
+  <div class="modal">
+    <h2 id="modal-title">IoC Threat Report</h2>
+    <pre id="modal-content"></pre>
+    <div class="modal-btns">
+      <button class="btn btn-green" onclick="downloadIoC()">⬇ Download JSON</button>
+      <button class="btn btn-red"   onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+ 
 <script>
 const API = 'http://localhost:8000';
-let pieChart = null;
-let serverOnline = false;
+let pieChart       = null;
+let serverOnline   = false;
+let allScans       = [];
+let currentIoCData = null;
  
+// -- Server check --
 async function checkServer() {
   try {
     const r = await fetch(`${API}/`);
     if (r.ok) {
       serverOnline = true;
-      document.getElementById('live-dot').style.background = '#22c55e';
-      document.getElementById('live-text').textContent = 'Live';
+      document.getElementById('live-dot').style.background  = '#22c55e';
+      document.getElementById('live-text').style.color      = '#22c55e';
+      document.getElementById('live-text').textContent      = 'Live';
       document.getElementById('server-warning').style.display = 'none';
     }
   } catch(e) {
     serverOnline = false;
-    document.getElementById('live-dot').style.background = '#ef4444';
-    document.getElementById('live-text').textContent = 'Offline';
+    document.getElementById('live-dot').style.background  = '#ef4444';
+    document.getElementById('live-text').style.color      = '#ef4444';
+    document.getElementById('live-text').textContent      = 'Offline';
     document.getElementById('server-warning').style.display = 'block';
   }
 }
  
+// -- Stats --
 async function loadStats() {
   try {
     const r = await fetch(`${API}/stats`);
     const d = await r.json();
- 
     document.getElementById('kpi-total').textContent = d.total;
     document.getElementById('kpi-phish').textContent = d.phishing;
     document.getElementById('kpi-susp').textContent  = d.suspicious;
     document.getElementById('kpi-safe').textContent  = d.safe;
  
-    if (d.total === 0) {
-      document.getElementById('no-data-msg').style.display = 'block';
-      return;
-    }
+    if (d.total === 0) { document.getElementById('no-data-msg').style.display = 'block'; return; }
     document.getElementById('no-data-msg').style.display = 'none';
  
-    const ctx = document.getElementById('pie-chart').getContext('2d');
-    const chartData = {
-      labels: ['Safe', 'Suspicious', 'Phishing'],
-      datasets: [{
-        data: [d.safe, d.suspicious, d.phishing],
-        backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'],
-        borderColor: '#0f172a',
-        borderWidth: 3,
-      }]
+    const ctx  = document.getElementById('pie-chart').getContext('2d');
+    const data = {
+      labels: ['Safe','Suspicious','Phishing'],
+      datasets:[{ data:[d.safe,d.suspicious,d.phishing],
+        backgroundColor:['#22c55e','#f59e0b','#ef4444'],
+        borderColor:'#0f172a', borderWidth:3 }]
     };
- 
-    if (pieChart) {
-      pieChart.data = chartData;
-      pieChart.update();
-    } else {
-      pieChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: chartData,
-        options: {
-          plugins: { legend: { labels: { color: '#94a3b8', padding: 16 } } },
-          cutout: '65%',
-        }
-      });
-    }
-  } catch(e) { console.warn('Stats fetch failed'); }
+    if (pieChart) { pieChart.data = data; pieChart.update(); }
+    else pieChart = new Chart(ctx, { type:'doughnut', data,
+      options:{ plugins:{ legend:{ labels:{ color:'#94a3b8', padding:16 } } }, cutout:'65%' }
+    });
+  } catch(e) { console.warn('Stats error'); }
 }
  
+// -- History --
 async function loadHistory() {
   try {
-    const r = await fetch(`${API}/history?limit=30`);
+    const r = await fetch(`${API}/history?limit=50`);
     const d = await r.json();
+    allScans = d.scans || [];
  
-    if (!d.scans || d.scans.length === 0) {
+    if (allScans.length === 0) {
       document.getElementById('history-body').innerHTML =
-        '<tr><td colspan="4" style="color:#475569;text-align:center">No scans yet</td></tr>';
+        '<tr><td colspan="5" style="color:#475569;text-align:center">No scans yet</td></tr>';
       return;
     }
  
-    const rows = [...d.scans].reverse().map(s => {
-      const obfBadge = (s.obfuscation_techniques && s.obfuscation_techniques.length > 0)
-        ? `<span class="badge badge-obf" title="${s.obfuscation_techniques.join(', ')}">obf</span>`
-        : '';
-      return `
-        <tr>
-          <td title="${s.url}">${s.url}${obfBadge}</td>
-          <td><span class="badge badge-${s.verdict}">${s.verdict}</span></td>
-          <td style="color:${s.verdict==='PHISHING'?'#ef4444':s.verdict==='SUSPICIOUS'?'#f59e0b':'#22c55e'}">${Math.round(s.risk_score * 100)}%</td>
-          <td style="color:#64748b">${s.scan_time_ms}ms</td>
-        </tr>`;
-    }).join('');
- 
+    const rows = [...allScans].reverse().map((s, i) => `
+      <tr>
+        <td title="${s.url}">${s.url}</td>
+        <td><span class="badge badge-${s.verdict}">${s.verdict}</span></td>
+        <td style="color:${s.verdict==='PHISHING'?'#ef4444':s.verdict==='SUSPICIOUS'?'#f59e0b':'#22c55e'}">
+          ${Math.round(s.risk_score*100)}%
+        </td>
+        <td style="color:#64748b">${s.scan_time_ms}ms</td>
+        <td>
+          <button class="small-btn" onclick="showIoC(${allScans.length-1-i})"
+            style="color:#3b82f6;border-color:#3b82f6">IoC</button>
+        </td>
+      </tr>
+    `).join('');
     document.getElementById('history-body').innerHTML = rows;
   } catch(e) {
     document.getElementById('history-body').innerHTML =
-      '<tr><td colspan="4" style="color:#ef4444;text-align:center">Could not load history</td></tr>';
+      '<tr><td colspan="5" style="color:#ef4444;text-align:center">Could not load history</td></tr>';
   }
 }
  
-async function loadAll() {
-  await checkServer();
-  if (serverOnline) {
-    await loadStats();
-    await loadHistory();
-  }
-}
+async function loadAll() { await checkServer(); if (serverOnline) { await loadStats(); await loadHistory(); } }
  
+// -- Manual scan --
 async function manualScan() {
   const url = document.getElementById('url-input').value.trim();
   if (!url) return;
- 
-  const el  = document.getElementById('scan-result');
-  const obf = document.getElementById('obfuscation-box');
+  const el = document.getElementById('scan-result');
   el.style.display = 'block';
   el.className = '';
-  el.innerHTML = '⏳ Scanning...';
-  obf.style.display = 'none';
- 
+  el.innerHTML  = '⏳ Scanning...';
   try {
     const r = await fetch(`${API}/scan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ url }),
     });
     const d = await r.json();
-    const cls = `result-${d.verdict.toLowerCase()}`;
-    el.className = cls;
- 
-    const signals = [];
-    const f = d.features_summary || {};
-    if (f.has_ip)             signals.push('IP in URL');
-    if (f.suspicious_tld)     signals.push('Suspicious TLD');
-    if (f.brand_in_subdomain) signals.push('Brand in subdomain');
-    if (f.random_domain)      signals.push('Random domain');
-    if (f.phish_hints > 0)    signals.push(`${f.phish_hints} phish hints`);
- 
+    el.className = `result-${d.verdict.toLowerCase()}`;
+    const signals = (d.threat_signals || []).join(', ');
     el.innerHTML = `
-      <strong>${d.verdict}</strong> — Risk Score: ${Math.round(d.risk_score * 100)}%
-      &nbsp;|&nbsp; ML Confidence: ${Math.round(d.ml_confidence * 100)}%
+      <strong>${d.verdict}</strong> — Risk: ${Math.round(d.risk_score*100)}%
+      &nbsp;|&nbsp; ML: ${Math.round(d.ml_confidence*100)}%
+      &nbsp;|&nbsp; URLhaus: ${d.urlhaus_flagged ? '⚠️ Flagged' : '✅ Clean'}
+      &nbsp;|&nbsp; DNS: ${d.dns_resolved ? d.dns_ip : 'Not resolved'}
       &nbsp;|&nbsp; ${d.scan_time_ms}ms
-      ${signals.length > 0 ? `<br><small style="color:#94a3b8">Signals: ${signals.join(', ')}</small>` : ''}
-      ${d.threat_signals && d.threat_signals.length > 0
-        ? `<br><small style="color:#f87171">⚑ ${d.threat_signals.join(' · ')}</small>`
-        : ''}
+      ${signals ? `<br><small style="color:#94a3b8">Signals: ${signals}</small>` : ''}
     `;
- 
-    // Show obfuscation box if detected
-    if (d.obfuscation_techniques && d.obfuscation_techniques.length > 0) {
-      obf.style.display = 'block';
-      document.getElementById('obfuscation-techniques').textContent =
-        'Techniques: ' + d.obfuscation_techniques.join(' · ');
-      if (d.decoded_url) {
-        document.getElementById('decoded-url').textContent = '→ Decoded: ' + d.decoded_url;
-      } else {
-        document.getElementById('decoded-url').textContent = '';
-      }
-    }
- 
     loadAll();
   } catch(e) {
     el.className = 'result-phishing';
-    el.innerHTML = '❌ API error — is the server running on port 8000?';
+    el.innerHTML = '❌ API error — is the server running?';
   }
 }
  
-// ── IoC Export ──────────────────────────────
-function exportIoC(format, verdict) {
-  const url = `${API}/export/ioc?format=${format}&verdict=${verdict}`;
-  // Trigger download
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `phishguard_ioc_${verdict.toLowerCase()}.${format}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+// -- IoC Report --
+function buildIoCReport(scan) {
+  return {
+    report_type:            "PhishGuard IoC Threat Report",
+    generated_at:           new Date().toISOString(),
+    indicator_of_compromise: {
+      url:                  scan.url,
+      verdict:              scan.verdict,
+      risk_score:           scan.risk_score,
+      ml_confidence:        scan.ml_confidence,
+      scan_time_ms:         scan.scan_time_ms,
+      timestamp:            scan.timestamp,
+    },
+    threat_intelligence: {
+      urlhaus_flagged:      scan.urlhaus_flagged,
+      urlhaus_threat_type:  scan.urlhaus_threat || null,
+      virustotal_detections:scan.virustotal_detections || null,
+    },
+    network_forensics: {
+      dns_resolved:         scan.dns_resolved,
+      resolved_ip:          scan.dns_ip || null,
+      whois_domain_age:     scan.whois_domain_age || null,
+      whois_registrar:      scan.whois_registrar || null,
+      typosquatting_target: scan.typosquatting_target || null,
+      typosquatting_distance: scan.typosquatting_distance || null,
+    },
+    url_features:           scan.features_summary || {},
+    threat_signals:         scan.threat_signals || [],
+    recommended_action:     scan.verdict === 'PHISHING'
+      ? 'BLOCK - Do not visit this URL. Report to your security team.'
+      : scan.verdict === 'SUSPICIOUS'
+      ? 'CAUTION - Verify URL authenticity before proceeding.'
+      : 'ALLOW - URL appears safe based on current analysis.',
+  };
 }
+ 
+function showIoC(index) {
+  const scan = allScans[index];
+  if (!scan) return;
+  currentIoCData = buildIoCReport(scan);
+  document.getElementById('modal-title').textContent = `IoC Report — ${scan.verdict} — ${scan.url.substring(0,50)}...`;
+  document.getElementById('modal-content').textContent = JSON.stringify(currentIoCData, null, 2);
+  document.getElementById('ioc-modal').classList.add('open');
+}
+ 
+function exportAllIoC() {
+  if (allScans.length === 0) { alert('No scans to export yet.'); return; }
+ 
+  const report = {
+    report_type:    "PhishGuard Bulk IoC Export",
+    generated_at:   new Date().toISOString(),
+    total_scans:    allScans.length,
+    phishing_count: allScans.filter(s => s.verdict === 'PHISHING').length,
+    suspicious_count: allScans.filter(s => s.verdict === 'SUSPICIOUS').length,
+    safe_count:     allScans.filter(s => s.verdict === 'SAFE').length,
+    indicators:     allScans.map(buildIoCReport),
+  };
+ 
+  currentIoCData = report;
+  document.getElementById('modal-title').textContent = `Bulk IoC Export — ${allScans.length} URLs`;
+  document.getElementById('modal-content').textContent = JSON.stringify(report, null, 2);
+  document.getElementById('ioc-modal').classList.add('open');
+}
+ 
+function downloadIoC() {
+  if (!currentIoCData) return;
+  const blob = new Blob([JSON.stringify(currentIoCData, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `phishguard_ioc_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+ 
+function closeModal() {
+  document.getElementById('ioc-modal').classList.remove('open');
+}
+ 
+// Close modal on overlay click
+document.getElementById('ioc-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
  
 document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') manualScan();
 });
  
+// Load on start, refresh every 5s
 loadAll();
 setInterval(loadAll, 5000);
 </script>
