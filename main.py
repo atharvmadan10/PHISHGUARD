@@ -2,14 +2,14 @@ import os
 import re
 import time
 import math
-import json
 import hashlib
 import asyncio
 import logging
 import socket
-import urllib.parse
+import base64
+import binascii
 from datetime import datetime
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, unquote_plus
 from typing import Optional
  
 import joblib
@@ -17,7 +17,6 @@ import pandas as pd
 import requests as req
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
  
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +24,7 @@ logger = logging.getLogger("phishguard")
  
 # -- Load model --
 MODEL_PATH    = "phishguard_model.pkl"
-FEATURES_PATH = "feature_names (1).pkl"
+FEATURES_PATH = "feature_names.pkl"
  
 if not os.path.exists(MODEL_PATH):
     raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
@@ -59,26 +58,33 @@ class ScanRequest(BaseModel):
     url: str
     check_virustotal: bool = False
  
+class ObfuscationReport(BaseModel):
+    original_url:        str
+    decoded_url:         str
+    was_obfuscated:      bool
+    techniques_detected: list
+ 
 class ScanResponse(BaseModel):
-    url: str
-    decoded_url: Optional[str]
+    url:                    str
+    decoded_url:            str
+    was_obfuscated:         bool
     obfuscation_techniques: list
-    verdict: str
-    risk_score: float
-    ml_confidence: float
-    urlhaus_flagged: bool
-    urlhaus_threat: Optional[str]
-    virustotal_detections: Optional[int]
-    dns_resolved: bool
-    dns_ip: Optional[str]
-    whois_domain_age: Optional[str]
-    whois_registrar: Optional[str]
-    typosquatting_target: Optional[str]
+    verdict:                str
+    risk_score:             float
+    ml_confidence:          float
+    urlhaus_flagged:        bool
+    urlhaus_threat:         Optional[str]
+    virustotal_detections:  Optional[int]
+    dns_resolved:           bool
+    dns_ip:                 Optional[str]
+    whois_domain_age:       Optional[str]
+    whois_registrar:        Optional[str]
+    typosquatting_target:   Optional[str]
     typosquatting_distance: Optional[int]
-    features_summary: dict
-    threat_signals: list
-    scan_time_ms: float
-    timestamp: str
+    features_summary:       dict
+    threat_signals:         list
+    scan_time_ms:           float
+    timestamp:              str
  
 # -- Constants --
 SUSPICIOUS_TLDS = {'.xyz','.tk','.ml','.ga','.cf','.gq','.pw','.top','.click','.club','.work'}
@@ -100,7 +106,124 @@ LEGIT_BRANDS    = {
     'dropbox':   'dropbox.com',
 }
  
-# -- Helpers --
+# ============================================================
+# OBFUSCATION DECODER
+# ============================================================
+ 
+def decode_obfuscation(url: str) -> tuple:
+    """
+    Detect and decode common URL obfuscation techniques.
+    Returns (decoded_url, was_obfuscated, techniques_detected)
+    """
+    original   = url
+    decoded    = url
+    techniques = []
+ 
+    # 1. Percent encoding / URL encoding (%XX)
+    if re.search(r'%[0-9a-fA-F]{2}', decoded):
+        try:
+            new = unquote(decoded)
+            if new != decoded:
+                techniques.append("Percent encoding (%XX)")
+                decoded = new
+        except Exception:
+            pass
+ 
+    # 2. Double percent encoding (%25XX)
+    if '%25' in decoded:
+        try:
+            new = unquote(unquote(decoded))
+            if new != decoded:
+                techniques.append("Double percent encoding (%25XX)")
+                decoded = new
+        except Exception:
+            pass
+ 
+    # 3. Unicode / punycode (xn--)
+    if 'xn--' in decoded.lower():
+        techniques.append("Punycode / Unicode domain (xn--)")
+ 
+    # 4. Hex encoded domain (0x format)
+    hex_match = re.search(r'0x([0-9a-fA-F]+)', decoded)
+    if hex_match:
+        try:
+            hex_val = hex_match.group(1)
+            # Convert hex IP to dotted decimal
+            ip_int = int(hex_val, 16)
+            ip     = f"{(ip_int>>24)&255}.{(ip_int>>16)&255}.{(ip_int>>8)&255}.{ip_int&255}"
+            decoded = decoded.replace(hex_match.group(0), ip)
+            techniques.append(f"Hex encoded IP ({hex_match.group(0)} -> {ip})")
+        except Exception:
+            pass
+ 
+    # 5. Octal encoded IP (e.g. 0177.0.0.01)
+    octal_match = re.search(r'(0\d+\.0\d+\.0\d+\.0\d+)', decoded)
+    if octal_match:
+        try:
+            parts  = octal_match.group(1).split('.')
+            ip     = '.'.join(str(int(p, 8)) for p in parts)
+            decoded = decoded.replace(octal_match.group(0), ip)
+            techniques.append(f"Octal encoded IP ({octal_match.group(0)} -> {ip})")
+        except Exception:
+            pass
+ 
+    # 6. Decimal encoded IP (e.g. http://3232235776 = 192.168.1.0)
+    decimal_ip = re.search(r'https?://(\d{8,10})(/|$)', decoded)
+    if decimal_ip:
+        try:
+            n   = int(decimal_ip.group(1))
+            ip  = f"{(n>>24)&255}.{(n>>16)&255}.{(n>>8)&255}.{n&255}"
+            decoded = decoded.replace(decimal_ip.group(1), ip)
+            techniques.append(f"Decimal encoded IP ({decimal_ip.group(1)} -> {ip})")
+        except Exception:
+            pass
+ 
+    # 7. Base64 encoded URL in query params
+    b64_match = re.search(r'[?&][^=]+=([A-Za-z0-9+/]{20,}={0,2})', decoded)
+    if b64_match:
+        try:
+            candidate = b64_match.group(1)
+            decoded_b64 = base64.b64decode(candidate + '==').decode('utf-8', errors='ignore')
+            if decoded_b64.startswith('http') or '.' in decoded_b64:
+                techniques.append(f"Base64 encoded parameter -> {decoded_b64[:60]}")
+        except Exception:
+            pass
+ 
+    # 8. URL inside URL (redirect obfuscation)
+    redirect_match = re.search(r'[?&](?:url|redirect|goto|next|target|link)=(.+)', decoded, re.IGNORECASE)
+    if redirect_match:
+        inner = unquote(redirect_match.group(1))
+        if inner.startswith('http'):
+            techniques.append(f"Redirect to: {inner[:80]}")
+ 
+    # 9. @ symbol trick (user@phishing.com -> phishing.com is actual destination)
+    if '@' in decoded:
+        at_part = decoded.split('@')[-1]
+        techniques.append(f"@ symbol trick - actual destination: {at_part.split('/')[0]}")
+ 
+    # 10. Multiple slashes obfuscation
+    if re.search(r'https?:/{3,}', decoded):
+        techniques.append("Multiple slashes after scheme (obfuscation)")
+        decoded = re.sub(r'(https?:/)/{2,}', r'\1/', decoded)
+ 
+    # 11. Null byte injection
+    if '%00' in decoded or '\x00' in decoded:
+        techniques.append("Null byte injection detected")
+        decoded = decoded.replace('%00', '').replace('\x00', '')
+ 
+    # 12. Tab/newline injection
+    if '%09' in decoded or '%0a' in decoded.lower() or '%0d' in decoded.lower():
+        techniques.append("Tab/newline injection detected")
+        decoded = re.sub(r'%0[9aAdD]', '', decoded)
+ 
+    was_obfuscated = len(techniques) > 0
+    return decoded, was_obfuscated, techniques
+ 
+ 
+# ============================================================
+# HELPERS
+# ============================================================
+ 
 def _entropy(s):
     if not s: return 0
     freq = {}
@@ -124,93 +247,10 @@ def levenshtein(s1, s2):
         prev = curr
     return prev[-1]
  
+# ============================================================
+# FEATURE EXTRACTION
+# ============================================================
  
-# ─────────────────────────────────────────────
-#  URL OBFUSCATION DECODER  (NEW)
-# ─────────────────────────────────────────────
- 
-def decode_obfuscation(url: str) -> tuple[str, list]:
-    """
-    Detect and decode common URL obfuscation techniques.
-    Returns (decoded_url, list_of_techniques_found).
-    """
-    techniques = []
-    decoded = url
- 
-    # 1. Percent-encoding (e.g. %68%74%74%70 = http)
-    try:
-        once = unquote(decoded)
-        if once != decoded:
-            techniques.append("Percent-encoded characters")
-            decoded = once
-        # Double encoding
-        twice = unquote(once)
-        if twice != once:
-            techniques.append("Double percent-encoding")
-            decoded = twice
-    except Exception:
-        pass
- 
-    # 2. Unicode / punycode domain (xn--)
-    if 'xn--' in decoded.lower():
-        techniques.append("Punycode / IDN homograph")
- 
-    # 3. Hexadecimal IP address (e.g. http://0x7f000001/)
-    hex_ip = re.search(r'https?://0x([0-9a-fA-F]{8})', decoded)
-    if hex_ip:
-        techniques.append("Hex-encoded IP address")
-        val = int(hex_ip.group(1), 16)
-        ip = '.'.join(str((val >> (8 * i)) & 0xFF) for i in reversed(range(4)))
-        decoded = decoded.replace(hex_ip.group(0), f"http://{ip}")
- 
-    # 4. Octal IP address (e.g. http://0177.0.0.1/)
-    octal_ip = re.search(r'https?://(0\d+\.0\d*\.0\d*\.0\d+)', decoded)
-    if octal_ip:
-        techniques.append("Octal-encoded IP address")
-        try:
-            parts = [int(p, 8) for p in octal_ip.group(1).split('.')]
-            decoded = decoded.replace(octal_ip.group(1), '.'.join(map(str, parts)))
-        except Exception:
-            pass
- 
-    # 5. Decimal IP address (e.g. http://2130706433/ = 127.0.0.1)
-    dec_ip = re.search(r'https?://(\d{8,10})/', decoded)
-    if dec_ip:
-        techniques.append("Decimal-encoded IP address")
-        try:
-            val = int(dec_ip.group(1))
-            ip = '.'.join(str((val >> (8 * i)) & 0xFF) for i in reversed(range(4)))
-            decoded = decoded.replace(dec_ip.group(1), ip)
-        except Exception:
-            pass
- 
-    # 6. @ symbol trick (everything before @ is fake user info)
-    if '@' in decoded:
-        techniques.append("@ symbol credential trick")
- 
-    # 7. Multiple slashes / redirects embedded in URL
-    if decoded.count('//') > 1:
-        techniques.append("Embedded redirect (multiple //)")
- 
-    # 8. Shortened URL
-    shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly',
-                  'rb.gy', 'is.gd', 'buff.ly', 'short.link']
-    if any(s in decoded.lower() for s in shorteners):
-        techniques.append("URL shortener service")
- 
-    # 9. Data URI obfuscation
-    if decoded.lower().startswith('data:'):
-        techniques.append("Data URI scheme")
- 
-    # 10. Tab / newline injection
-    if '\t' in decoded or '\n' in decoded or '\r' in decoded:
-        techniques.append("Whitespace injection (tab/newline)")
-        decoded = decoded.replace('\t', '').replace('\n', '').replace('\r', '')
- 
-    return decoded, techniques
- 
- 
-# -- Feature extraction --
 def extract_features(url: str) -> dict:
     try:
         if not isinstance(url, str): url = ''
@@ -336,15 +376,16 @@ def run_ml(url: str):
     return prob, feats
  
  
-# -- CTI Integrations --
+# ============================================================
+# CTI INTEGRATIONS
+# ============================================================
  
 def check_urlhaus(url: str) -> tuple:
     try:
         resp = req.post(URLHAUS_API, data={"url": url}, timeout=5)
         data = resp.json()
         if data.get("query_status") == "is_listed":
-            threat = data.get("threat", "malware")
-            return True, threat
+            return True, data.get("threat", "malware")
         return False, None
     except Exception as e:
         logger.warning(f"URLhaus check failed: {e}")
@@ -356,8 +397,7 @@ def check_urlhaus_host(domain: str) -> tuple:
         resp = req.post(URLHAUS_HOST_API, data={"host": domain}, timeout=5)
         data = resp.json()
         if data.get("query_status") == "is_listed":
-            urls_online = data.get("urls_online", 0)
-            return True, f"{urls_online} malicious URLs on this host"
+            return True, f"{data.get('urls_online', 0)} malicious URLs on this host"
         return False, None
     except Exception as e:
         logger.warning(f"URLhaus host check failed: {e}")
@@ -368,7 +408,6 @@ def check_virustotal(url: str) -> Optional[int]:
     if not VIRUSTOTAL_API_KEY:
         return None
     try:
-        import base64
         url_id  = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
         headers = {"x-apikey": VIRUSTOTAL_API_KEY}
         resp    = req.get(
@@ -378,14 +417,6 @@ def check_virustotal(url: str) -> Optional[int]:
         if resp.status_code == 200:
             stats = resp.json()["data"]["attributes"]["last_analysis_stats"]
             return stats.get("malicious", 0) + stats.get("suspicious", 0)
-        elif resp.status_code == 404:
-            req.post(
-                "https://www.virustotal.com/api/v3/urls",
-                headers=headers,
-                data={"url": url},
-                timeout=5
-            )
-            return 0
     except Exception as e:
         logger.warning(f"VirusTotal check failed: {e}")
     return None
@@ -402,12 +433,10 @@ def check_dns(domain: str) -> tuple:
 def check_whois(domain: str) -> tuple:
     try:
         import whois
-        w = whois.whois(domain)
+        w         = whois.whois(domain)
         registrar = w.registrar if hasattr(w, 'registrar') else None
- 
-        creation = w.creation_date
-        if isinstance(creation, list):
-            creation = creation[0]
+        creation  = w.creation_date
+        if isinstance(creation, list): creation = creation[0]
         if creation:
             age_days = (datetime.now() - creation).days
             if age_days < 30:
@@ -430,40 +459,36 @@ def check_typosquatting(domain: str) -> tuple:
         min_brand = None
         for brand, legit_domain in LEGIT_BRANDS.items():
             legit_base = legit_domain.split('.')[0]
-            if base == legit_base:
-                return None, None
+            if base == legit_base: return None, 0
             dist = levenshtein(base, legit_base)
             if dist < min_dist:
                 min_dist  = dist
                 min_brand = legit_domain
         if min_dist <= 3:
             return min_brand, min_dist
-        return None, None
+        return None, min_dist
     except Exception:
         return None, None
  
  
-def compute_final_verdict(ml_prob, urlhaus, vt_detections):
+def compute_final_verdict(ml_prob, urlhaus, vt_detections, was_obfuscated):
     score = ml_prob
-    if urlhaus:
-        score = min(1.0, score + 0.3)
+    if urlhaus:         score = min(1.0, score + 0.3)
+    if was_obfuscated:  score = min(1.0, score + 0.15)
     if vt_detections:
-        if vt_detections >= 5:
-            score = min(1.0, score + 0.25)
-        elif vt_detections >= 2:
-            score = min(1.0, score + 0.1)
+        if vt_detections >= 5:  score = min(1.0, score + 0.25)
+        elif vt_detections >= 2: score = min(1.0, score + 0.1)
  
-    if score >= 0.7:
-        verdict = "PHISHING"
-    elif score >= 0.4:
-        verdict = "SUSPICIOUS"
-    else:
-        verdict = "SAFE"
+    if score >= 0.7:   verdict = "PHISHING"
+    elif score >= 0.4: verdict = "SUSPICIOUS"
+    else:              verdict = "SAFE"
  
     return verdict, round(score, 4)
  
  
-# -- Routes --
+# ============================================================
+# ROUTES
+# ============================================================
  
 @app.get("/")
 def root():
@@ -473,15 +498,30 @@ def root():
 @app.get("/health")
 def health():
     return {
-        "status":           "healthy",
-        "model_features":   len(feature_names),
-        "cached_scans":     len(_cache),
-        "virustotal":       "enabled" if VIRUSTOTAL_API_KEY else "disabled - set VIRUSTOTAL_API_KEY env var",
-        "urlhaus":          "enabled",
-        "whois":            "enabled",
-        "dns":              "enabled",
+        "status":         "healthy",
+        "model_features": len(feature_names),
+        "cached_scans":   len(_cache),
+        "virustotal":     "enabled" if VIRUSTOTAL_API_KEY else "disabled",
+        "urlhaus":        "enabled",
+        "whois":          "enabled",
+        "dns":            "enabled",
         "obfuscation_decoder": "enabled",
     }
+ 
+ 
+@app.post("/decode", response_model=ObfuscationReport)
+def decode_url(req_body: ScanRequest):
+    """Decode a URL and return obfuscation techniques detected — without full scan."""
+    url = req_body.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL cannot be empty")
+    decoded, was_obfuscated, techniques = decode_obfuscation(url)
+    return ObfuscationReport(
+        original_url        = url,
+        decoded_url         = decoded,
+        was_obfuscated      = was_obfuscated,
+        techniques_detected = techniques,
+    )
  
  
 @app.post("/scan", response_model=ScanResponse)
@@ -489,15 +529,7 @@ async def scan_url(req_body: ScanRequest):
     url = req_body.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="URL cannot be empty")
-    if not url.startswith(('http://', 'https://')):
-        url = 'http://' + url
  
-    # Obfuscation decoding FIRST
-    decoded_url, obfuscation_techniques = decode_obfuscation(url)
-    # Run ML on the decoded URL for better accuracy
-    scan_url_effective = decoded_url if decoded_url != url else url
- 
-    # Cache check
     cache_key = hashlib.md5(url.encode()).hexdigest()
     if cache_key in _cache:
         logger.info(f"Cache hit: {url}")
@@ -505,18 +537,23 @@ async def scan_url(req_body: ScanRequest):
  
     t0 = time.time()
  
-    # Parse domain
+    # Step 1 — Decode obfuscation first
+    decoded_url, was_obfuscated, obfuscation_techniques = decode_obfuscation(url)
+ 
+    # Step 2 — Use decoded URL for all checks
+    scan_url_final = decoded_url
+ 
     try:
-        parsed = urlparse(scan_url_effective)
+        parsed = urlparse(scan_url_final if scan_url_final.startswith('http') else 'http://' + scan_url_final)
         domain = parsed.netloc.lower().replace('www.', '')
     except:
         domain = ''
  
-    # Run all checks concurrently
-    loop = asyncio.get_running_loop()
+    # Step 3 — Run all CTI checks concurrently on decoded URL
+    loop = asyncio.get_event_loop()
  
-    ml_task        = loop.run_in_executor(None, run_ml, scan_url_effective)
-    urlhaus_task   = loop.run_in_executor(None, check_urlhaus, url)
+    ml_task        = loop.run_in_executor(None, run_ml, scan_url_final)
+    urlhaus_task   = loop.run_in_executor(None, check_urlhaus, scan_url_final)
     urlhaus_h_task = loop.run_in_executor(None, check_urlhaus_host, domain)
     dns_task       = loop.run_in_executor(None, check_dns, domain)
     whois_task     = loop.run_in_executor(None, check_whois, domain)
@@ -524,7 +561,7 @@ async def scan_url(req_body: ScanRequest):
  
     vt_detections = None
     if req_body.check_virustotal and VIRUSTOTAL_API_KEY:
-        vt_task = loop.run_in_executor(None, check_virustotal, url)
+        vt_task       = loop.run_in_executor(None, check_virustotal, scan_url_final)
         vt_detections = await vt_task
  
     ml_prob, feats          = await ml_task
@@ -538,39 +575,25 @@ async def scan_url(req_body: ScanRequest):
         urlhaus_flagged = True
         threat = urlhaus_hmsg
  
-    verdict, risk_score = compute_final_verdict(ml_prob, urlhaus_flagged, vt_detections)
- 
-    # Boost score if obfuscation detected
-    if obfuscation_techniques and verdict == "SAFE":
-        risk_score = min(1.0, risk_score + 0.15 * len(obfuscation_techniques))
-        if risk_score >= 0.4:
-            verdict = "SUSPICIOUS"
+    verdict, risk_score = compute_final_verdict(ml_prob, urlhaus_flagged, vt_detections, was_obfuscated)
  
     elapsed_ms = round((time.time() - t0) * 1000, 1)
  
+    # Build threat signals
     threat_signals = []
-    if obfuscation_techniques:
-        threat_signals.append(f"Obfuscation detected: {', '.join(obfuscation_techniques)}")
-    if urlhaus_flagged:
-        threat_signals.append(f"URLhaus blacklisted: {threat}")
-    if vt_detections:
-        threat_signals.append(f"VirusTotal: {vt_detections} detections")
-    if feats.get('suspecious_tld'):
-        threat_signals.append("Suspicious TLD")
-    if feats.get('ip'):
-        threat_signals.append("IP address used instead of domain")
-    if feats.get('random_domain'):
-        threat_signals.append("Randomly generated domain")
-    if feats.get('brand_in_subdomain'):
-        threat_signals.append("Brand name in subdomain")
-    if feats.get('phish_hints', 0) > 0:
-        threat_signals.append(f"Phish keywords detected: {int(feats.get('phish_hints'))}")
-    if typo_target:
-        threat_signals.append(f"Typosquatting: looks like {typo_target} (distance={typo_dist})")
-    if not dns_resolved:
-        threat_signals.append("Domain does not resolve - possibly fake")
-    if whois_age and 'NEW' in str(whois_age):
-        threat_signals.append(f"Newly registered domain: {whois_age}")
+    if was_obfuscated:
+        for t in obfuscation_techniques:
+            threat_signals.append(f"Obfuscation: {t}")
+    if urlhaus_flagged:                   threat_signals.append(f"URLhaus blacklisted: {threat}")
+    if vt_detections:                     threat_signals.append(f"VirusTotal: {vt_detections} detections")
+    if feats.get('suspecious_tld'):       threat_signals.append("Suspicious TLD")
+    if feats.get('ip'):                   threat_signals.append("IP address used instead of domain")
+    if feats.get('random_domain'):        threat_signals.append("Randomly generated domain")
+    if feats.get('brand_in_subdomain'):   threat_signals.append("Brand name in subdomain")
+    if feats.get('phish_hints') > 0:      threat_signals.append(f"Phish keywords: {int(feats.get('phish_hints'))}")
+    if typo_target:                       threat_signals.append(f"Typosquatting: looks like {typo_target} (distance={typo_dist})")
+    if not dns_resolved:                  threat_signals.append("Domain does not resolve - possibly fake")
+    if whois_age and 'NEW' in str(whois_age): threat_signals.append(f"Newly registered: {whois_age}")
  
     features_summary = {
         "length_url":         feats.get("length_url"),
@@ -586,25 +609,26 @@ async def scan_url(req_body: ScanRequest):
     }
  
     result = ScanResponse(
-        url=url,
-        decoded_url=decoded_url if decoded_url != url else None,
-        obfuscation_techniques=obfuscation_techniques,
-        verdict=verdict,
-        risk_score=risk_score,
-        ml_confidence=round(ml_prob, 4),
-        urlhaus_flagged=urlhaus_flagged,
-        urlhaus_threat=threat,
-        virustotal_detections=vt_detections,
-        dns_resolved=dns_resolved,
-        dns_ip=dns_ip,
-        whois_domain_age=whois_age,
-        whois_registrar=whois_reg,
-        typosquatting_target=typo_target,
-        typosquatting_distance=typo_dist if typo_target else None,
-        features_summary=features_summary,
-        threat_signals=threat_signals,
-        scan_time_ms=elapsed_ms,
-        timestamp=datetime.utcnow().isoformat() + "Z"
+        url                    = url,
+        decoded_url            = decoded_url,
+        was_obfuscated         = was_obfuscated,
+        obfuscation_techniques = obfuscation_techniques,
+        verdict                = verdict,
+        risk_score             = risk_score,
+        ml_confidence          = round(ml_prob, 4),
+        urlhaus_flagged        = urlhaus_flagged,
+        urlhaus_threat         = threat,
+        virustotal_detections  = vt_detections,
+        dns_resolved           = dns_resolved,
+        dns_ip                 = dns_ip,
+        whois_domain_age       = whois_age,
+        whois_registrar        = whois_reg,
+        typosquatting_target   = typo_target,
+        typosquatting_distance = typo_dist if typo_target else None,
+        features_summary       = features_summary,
+        threat_signals         = threat_signals,
+        scan_time_ms           = elapsed_ms,
+        timestamp              = datetime.utcnow().isoformat() + "Z"
     )
  
     _cache[cache_key] = result
@@ -633,62 +657,3 @@ def get_stats():
         "safe":       verdicts.count("SAFE"),
     }
  
- 
-@app.get("/export/ioc")
-def export_ioc(format: str = "json", verdict: str = "ALL"):
-    """
-    Export Indicators of Compromise (IoC) report.
-    - format: 'json' or 'csv'
-    - verdict: 'ALL', 'PHISHING', 'SUSPICIOUS'
-    """
-    scans = _scan_history
-    if verdict != "ALL":
-        scans = [s for s in scans if s["verdict"] == verdict.upper()]
- 
-    ioc_records = []
-    for s in scans:
-        ioc_records.append({
-            "ioc_type":              "url",
-            "indicator":             s["url"],
-            "decoded_url":           s.get("decoded_url") or s["url"],
-            "verdict":               s["verdict"],
-            "risk_score":            s["risk_score"],
-            "ml_confidence":         s["ml_confidence"],
-            "urlhaus_flagged":       s["urlhaus_flagged"],
-            "urlhaus_threat":        s.get("urlhaus_threat") or "",
-            "virustotal_detections": s.get("virustotal_detections") or 0,
-            "dns_ip":                s.get("dns_ip") or "",
-            "whois_domain_age":      s.get("whois_domain_age") or "",
-            "whois_registrar":       s.get("whois_registrar") or "",
-            "typosquatting_target":  s.get("typosquatting_target") or "",
-            "obfuscation_techniques": "; ".join(s.get("obfuscation_techniques") or []),
-            "threat_signals":        "; ".join(s.get("threat_signals") or []),
-            "timestamp":             s["timestamp"],
-        })
- 
-    if format.lower() == "csv":
-        if not ioc_records:
-            return Response(content="No data", media_type="text/csv")
-        headers_csv = list(ioc_records[0].keys())
-        lines = [",".join(headers_csv)]
-        for row in ioc_records:
-            lines.append(",".join(f'"{str(row[h]).replace(chr(34), chr(39))}"' for h in headers_csv))
-        csv_content = "\n".join(lines)
-        return Response(
-            content=csv_content,
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=phishguard_ioc_report.csv"}
-        )
- 
-    # JSON export
-    report = {
-        "report_type":    "PhishGuard IoC Export",
-        "generated_at":   datetime.utcnow().isoformat() + "Z",
-        "total_iocs":     len(ioc_records),
-        "filter_verdict": verdict,
-        "indicators":     ioc_records,
-    }
-    return JSONResponse(
-        content=report,
-        headers={"Content-Disposition": "attachment; filename=phishguard_ioc_report.json"}
-    )
