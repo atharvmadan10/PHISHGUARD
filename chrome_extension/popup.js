@@ -1,4 +1,4 @@
-/// popup.js
+// popup.js - PhishGuard v2
  
 function getColorForVerdict(verdict) {
   return { SAFE: '#22c55e', SUSPICIOUS: '#f59e0b', PHISHING: '#ef4444' }[verdict] || '#64748b';
@@ -15,19 +15,77 @@ function isInternalURL(url) {
   );
 }
  
-function renderResult(data, url) {
-  const color = getColorForVerdict(data.verdict);
-  const riskPct = Math.round(data.risk_score * 100);
+function buildSignals(data) {
+  const signals = [];
   const f = data.features_summary || {};
  
-  const flags = [];
-  if (f.has_ip)             flags.push(['IP in URL', 'bad']);
-  if (f.suspicious_tld)     flags.push(['Suspicious TLD', 'bad']);
-  if (f.brand_in_subdomain) flags.push(['Brand in subdomain', 'bad']);
-  if (f.random_domain)      flags.push(['Random domain', 'bad']);
-  if (f.shortening_service) flags.push(['URL Shortener', 'bad']);
-  if (f.phish_hints > 0)    flags.push([`Phish hints: ${f.phish_hints}`, 'bad']);
-  if (flags.length === 0)   flags.push(['No major threats', 'ok']);
+  // CTI signals (highest priority)
+  if (data.urlhaus_flagged)
+    signals.push({ text: `URLhaus: ${data.urlhaus_threat || 'Blacklisted'}`, type: 'bad' });
+ 
+  if (data.virustotal_detections > 0)
+    signals.push({ text: `VirusTotal: ${data.virustotal_detections} detections`, type: 'bad' });
+ 
+  if (data.typosquatting_target)
+    signals.push({ text: `Typosquatting: looks like ${data.typosquatting_target}`, type: 'bad' });
+ 
+  if (!data.dns_resolved)
+    signals.push({ text: 'Domain does not resolve - possibly fake', type: 'bad' });
+ 
+  if (data.whois_domain_age && data.whois_domain_age.includes('NEW'))
+    signals.push({ text: `Newly registered: ${data.whois_domain_age}`, type: 'bad' });
+ 
+  // ML-based signals from features
+  if (f.has_ip)
+    signals.push({ text: 'IP address used instead of domain name', type: 'bad' });
+ 
+  if (f.suspicious_tld)
+    signals.push({ text: 'Suspicious TLD (.xyz .tk .ml etc)', type: 'bad' });
+ 
+  if (f.brand_in_subdomain)
+    signals.push({ text: 'Brand name hidden in subdomain', type: 'bad' });
+ 
+  if (f.random_domain)
+    signals.push({ text: 'Randomly generated domain name', type: 'bad' });
+ 
+  if (f.shortening_service)
+    signals.push({ text: 'URL shortener used to hide destination', type: 'bad' });
+ 
+  if (f.phish_hints > 0)
+    signals.push({ text: `${f.phish_hints} phishing keyword(s) in URL`, type: 'bad' });
+ 
+  if (f.nb_hyphens > 2)
+    signals.push({ text: `Excessive hyphens in domain (${f.nb_hyphens})`, type: 'bad' });
+ 
+  if (f.length_url > 100)
+    signals.push({ text: `Unusually long URL (${f.length_url} chars)`, type: 'bad' });
+ 
+  if (f.nb_subdomains > 2)
+    signals.push({ text: `Too many subdomains (${f.nb_subdomains})`, type: 'bad' });
+ 
+  // If ML says phishing but no specific signals found — explain why
+  if (signals.length === 0 && data.verdict === 'PHISHING') {
+    signals.push({ text: `ML model flagged URL pattern (${Math.round(data.ml_confidence * 100)}% confidence)`, type: 'bad' });
+    signals.push({ text: 'URL structure matches known phishing patterns', type: 'bad' });
+  }
+ 
+  if (signals.length === 0 && data.verdict === 'SUSPICIOUS') {
+    signals.push({ text: 'URL pattern partially matches suspicious signatures', type: 'warn' });
+  }
+ 
+  return signals;
+}
+ 
+function renderResult(data, url) {
+  const color   = getColorForVerdict(data.verdict);
+  const riskPct = Math.round(data.risk_score * 100);
+  const mlPct   = Math.round(data.ml_confidence * 100);
+  const f       = data.features_summary || {};
+  const signals = buildSignals(data);
+ 
+  const signalsHTML = signals.length > 0
+    ? signals.map(s => `<span class="tag tag-${s.type === 'warn' ? 'warn' : 'bad'}">${s.text}</span>`).join('')
+    : `<span class="tag tag-ok">No threats detected</span>`;
  
   document.getElementById('content').innerHTML = `
     <div class="verdict-block">
@@ -35,16 +93,49 @@ function renderResult(data, url) {
       <div class="risk-bar-wrap">
         <div class="risk-bar" style="width:${riskPct}%;background:${color}"></div>
       </div>
-      <div class="score-text">Risk Score: ${riskPct}% &nbsp;|&nbsp; ML Confidence: ${riskPct}%</div>
+      <div class="score-text">
+        Risk Score: ${riskPct}% &nbsp;|&nbsp; ML Confidence: ${mlPct}%
+      </div>
     </div>
  
     <div class="section">
       <h3>Threat Signals</h3>
-      <div>
-        ${flags.map(([label, type]) =>
-          `<span class="tag tag-${type}">${label}</span>`
-        ).join('')}
+      <div>${signalsHTML}</div>
+    </div>
+ 
+    <div class="section">
+      <h3>CTI Intelligence</h3>
+      <div class="feature-row">
+        <span>URLhaus</span>
+        <span class="val ${data.urlhaus_flagged ? 'val-bad' : 'val-ok'}">
+          ${data.urlhaus_flagged ? 'BLACKLISTED' : 'Clean'}
+        </span>
       </div>
+      <div class="feature-row">
+        <span>DNS</span>
+        <span class="val ${data.dns_resolved ? 'val-ok' : 'val-bad'}">
+          ${data.dns_resolved ? (data.dns_ip || 'Resolved') : 'Not resolved'}
+        </span>
+      </div>
+      <div class="feature-row">
+        <span>Domain Age</span>
+        <span class="val ${data.whois_domain_age && data.whois_domain_age.includes('NEW') ? 'val-bad' : 'val-ok'}">
+          ${data.whois_domain_age || 'Unknown'}
+        </span>
+      </div>
+      <div class="feature-row">
+        <span>Typosquatting</span>
+        <span class="val ${data.typosquatting_target ? 'val-bad' : 'val-ok'}">
+          ${data.typosquatting_target ? `Mimics ${data.typosquatting_target}` : 'None'}
+        </span>
+      </div>
+      ${data.virustotal_detections !== null && data.virustotal_detections !== undefined ? `
+      <div class="feature-row">
+        <span>VirusTotal</span>
+        <span class="val ${data.virustotal_detections > 0 ? 'val-bad' : 'val-ok'}">
+          ${data.virustotal_detections} detections
+        </span>
+      </div>` : ''}
     </div>
  
     <div class="section">
@@ -108,18 +199,11 @@ function showInternal() {
   `;
 }
  
-// Main
 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   const tab = tabs[0];
   if (!tab || !tab.url) { showError('No active tab found.'); return; }
- 
   const url = tab.url;
- 
-  // Skip internal pages
-  if (isInternalURL(url)) {
-    showInternal();
-    return;
-  }
+  if (isInternalURL(url)) { showInternal(); return; }
  
   fetch('http://localhost:8000/scan', {
     method: 'POST',
