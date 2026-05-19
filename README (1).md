@@ -280,10 +280,7 @@ The dashboard supports exporting structured IoC (Indicator of Compromise) report
 
 ---
 
-## Mentors
 
-- Naitik - 8178596442
-- Aarsh - 9520316522
 
 ---
 
